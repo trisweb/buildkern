@@ -27,7 +27,9 @@ Before you start, you should also edit the `buildkern` script file, with two key
 
 ## Installing
 
-Copy the `buildkern` executable script to a directory in your $PATH. `$HOME/bin` if you use that, or `/usr/local/bin` works well.
+1. Copy the `buildkern` executable script to a directory in your $PATH. `$HOME/bin` if you use that, or `/usr/local/bin` works well.
+2. Install dependencies:
+        apt install build-essential bc kmod cpio flex libncurses5-dev libelf-dev libssl-dev dwarves bison packaging-dev
 
 ## Usage
 
