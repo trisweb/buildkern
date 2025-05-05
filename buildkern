@@ -1,0 +1,507 @@
+#!/bin/bash
+
+#############################################################################################################################
+# buildkern: Easy Debian-based Kernel Build Script!
+#############################################################################################################################
+#
+# This Debian Kernel build script makes compiling your own kernels and keeping up to date with latest kernels very easy.
+# It works with the apt package manager, and the build-in kernel compiler debian packaging pipeline, to enable you to
+# treat your custom kernels as a real system package, just like your distro would.
+#
+# I recommend you start by creating your own kernel config. This is the only part I haven't create a guided system for, but it's
+# good to learn in any case. To do this, run 'buildkern -d' to download the latest kernel version, then cd into the source
+# folder, and run "make menuconfig". You can also start with the config file from your distro's kernel, which will be large
+# and have a lot that you will not need, but should be safe and more guaranteed to work. I recommend you start your own config.
+# Here's a good guide: https://how-to.fandom.com/wiki/How_to_configure_the_Linux_kernel
+#
+# For normal every day kernel compilation once you have a config, you can just run 'buildkern -o'. This will download, 
+# configure, and build a kernel optimized for exactly your current system (and only your current system). Note: it uses the
+# default optimization level and compile flags, as the kernel is sensitive to compiler flags and there's near zero benefit.
+# If you would like to use optimization flags, such as -O3, these can be configured in your kernel config.
+#
+# If you just want to check if a new kernel version is available, you can run 'buildkern -v'
+#
+# Run buildkern with no arguments for full usage.
+#
+# Note: This script is not designed for building generic or portable kernels. It builds kernels for your current machine.
+# Generally speaking, this will mean a faster, more appropriate kernel for your hardware that's streamlined and compiled
+# for exactly what your CPU likes. It can result in a 3-5% speedup from a stock generic kernel, which is generally speaking
+# not worth the trouble, but if it's easy enough, why not?
+#
+#############################################################################################################################
+
+# TODO:
+# - Check for dependencies and offer to install an appropriate build pipeline.
+#   - Those dependencies are: build-essential bc kmod cpio flex libncurses5-dev libelf-dev libssl-dev dwarves bison packaging-dev
+#   - apt install build-essential bc kmod cpio flex libncurses5-dev libelf-dev libssl-dev dwarves bison packaging-dev
+# - Handle config files via the --config parameter, and via interactive selection from ones in the /config folder.
+# - Handle options for creating new config files with recommended defaults.
+
+#############################################################################################################################
+#
+# SETTINGS
+# System configuration: tune to your needs
+# SRCDIR: Where you want to store, download, and compile in place.
+SRCDIR=$HOME/src/linux
+# CONFIGDIR: Where you want to store your configs. We'll save a config for each compiled kernel.
+CONFIGDIR=$SRCDIR/config
+# KERNEL_NAME: This is your personal kernel name, equivalent to CONFIG_LOCALVERSION. 
+# Only used for --clean, to keep cleaning behavior to your kernels only.
+KERNEL_NAME="-trisweb-desktop"
+#
+#############################################################################################################################
+
+# Colors
+BOLD=$(tput bold)
+RED=$(tput setaf 1)
+GRN=$(tput setaf 2)
+YLW=$(tput setaf 3)
+NORM=$(tput sgr0)
+
+usage_count=0
+
+usage() {
+    if [[ $usage_count -gt 0 ]]; then return; fi
+    
+    cat <<EOF >&2
+${BOLD}buildkern${NORM}: ${YLW}get a Linux kernel and build it for Debian.${NORM}
+
+This script is designed to make keeping kernels up to date on Debian as
+simple as other activities on a modern Linux system.
+
+Given the parameter -b or --build, buildkern simply looks for a properly configured kernel 
+config in the current directory and initiates a 'bindeb-pkg' build for Debian.
+This will produce .deb packages you can easily install with 'dpkg -i'.
+
+With most parameters, buildkern will instead download a kernel to the SRCDIR 
+folder, extract it, configure it with various prompts, and then build it.
+
+The default setup is to have sources live at ~/src/linux, with your 
+configuration files for various builds in ~/src/linux/config. This may be changed 
+in the script.
+
+${BOLD}Parameters:${NORM}
+  -h|--help: show this message.
+  -v|--get-version: print the latest release only (works with other params)
+  -d|--download: download the latest kernel (stable by default) before building
+  -b|--build: build the kernel in the current dir (or the one just grabbed)
+  -c|--configure: run 'make menuconfig' to enter kernel configuration before compiling
+  -r|--rc: download an RC kernel. Implies -d.
+  -s|--stable: download a stable kernel. Implies -d. Default
+  --clean: automatically clean all sources and installed kernels of yours, keeping the latest two
+  --torvalds: get directly from Linus Torvalds' repo (sometimes needed for newest releases)
+  --version: download and build a specific version (6.x branch only right now)
+  --march=[native|arch]: build an optimized kernel specifically for the specified 
+                        CPU. Defaults to 'native' (current CPU) if none specified.
+                        Note: this script is not recommended for cross-compiling, as
+                        significant additional setup is necessary.
+  -o|--optimized: shortcut for "-dbs --march=native", an optimized kernel for the current machine (ONLY).
+  -y|--yes: say yes to all prompts immediately. Good for non-interactive/scripting and/or laziness.
+  --dry-run: don't actually do anything, just show what would be done.
+EOF
+    usage_count=$usage_count+1
+}
+
+#   -c|--config: use the specified config file to build after downloading.
+
+# Private defaults. Don't change these plz.
+KERNEL_TREE="stable"
+DOWNLOAD=false
+BUILD=false
+ASKFIRST=true
+MARCH=""
+DRY_RUN=false
+GET_VERSION_ONLY=false
+CLEAN=false
+CONFIGURE=false
+
+if options="$(getopt -o abcdefghijklmnopqrstuvABCDEFGHIJKLMNOPQRSTUV0123456789 \
+    -a -n buildkern -l download,build,help,version,get-version,rc,stable,torvalds,config,march:,dry-run,yes,optimized,clean,configure -- "$@")"; then
+    eval set -- "$options"
+    while true; do
+        case "${1,,}" in
+        -h|--help)
+            usage
+            ;;
+        -d|--download)
+            DOWNLOAD=true
+            ;;
+        -b|--build)
+            BUILD=true
+            ;;
+        --clean)
+            CLEAN=true
+            ;;
+        -c|--configure)
+            CONFIGURE=true
+            ;;
+        --version)
+            DOWNLOAD=true
+            KERNEL_VERSION=$2
+            shift
+            ;;
+        -r|--rc)
+            DOWNLOAD=true
+            KERNEL_TREE="rc"
+            ;;
+        -s|--stable)
+            DOWNLOAD=true
+            KERNEL_TREE="stable"
+            ;;
+        --torvalds)
+            DOWNLOAD=true
+            KERNEL_TREE="torvalds"
+            ;;
+        --march)
+            MARCH=${2:-'native'}
+            shift
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            ;;
+        -v|--get-version)
+            DOWNLOAD=true
+            DRY_RUN=true
+            GET_VERSION_ONLY=true
+            ;;
+        -o|--optimized)
+            DOWNLOAD=true
+            BUILD=true
+            MARCH="native"
+            ;;
+        -y|--yes)
+            ASKFIRST=false
+            ;;
+        --)
+            shift
+            break
+            ;;
+        *)
+            echo "Invalid option '$1'"
+            usage "$1"
+            ;;
+        esac
+        shift
+    done
+fi
+
+# Currently running kernel version for convenience
+current_run=$(uname -r | sed s/[^0-9\.]//g)
+
+###############################################################################
+# Clean Only
+if $CLEAN; then
+    echo $YLW"[SOURCES] Cleaning sources in ~/src/linux..."$NORM
+
+    sources=$(find $SRCDIR -maxdepth 1 -type d -iname linux\* -printf '%P\n' | sed s/[^0-9\.]//g | sort -V)
+    sources=($sources)
+
+    echo "Sources in $SRCDIR (red to be removed):  "
+    len=${#sources[@]}
+    for i in ${!sources[@]};
+    do
+        item=${sources[$i]}
+        if [[ $i -lt $(($len - 2)) ]]; then
+            echo $RED"  * "$item$NORM
+        else
+            echo "  * "$item
+        fi
+    done
+    echo
+    read -p "[SOURCES] Removing all but latest 2 or currently running ($current_run). Continue? " reply
+    echo
+    if [ "$reply" = "Y" ] || [ "$reply" = "y" ]; then
+        cd $SRCDIR
+        for i in ${!sources[@]};
+        do
+            item=${sources[$i]}
+            itemver=$item
+            if [[ "$item" =~ ^[0-9]+\.[0-9]+$ ]]; then
+                itemver="$item.0"
+            fi
+
+            if [[ $i -lt $(($len - 2)) ]] && [ "$itemver" != "$current_run" ]; then
+                echo -n $RED"  * Removing "$item"..."$NORM
+                # The source folder recursively
+                if [[ -d $SRCDIR/linux-$item ]]; then
+                    rm -r $SRCDIR/linux-$item
+                fi
+                # Compiled files individually
+                rm $SRCDIR/linux*$itemver-*
+                echo " Done."
+            else
+                echo -n $GRN"  * Preserving "$item
+                [ "$itemver" = "$current_run" ] && echo -n " $YLW(currently running version)"
+                echo $NORM
+            fi
+        done
+    else
+        echo "Nothing removed. Carry on."
+    fi
+
+    echo "------------------------------------------------"
+    echo $YLW"[PACKAGES] Finding installed kernel packages..."$NORM
+
+    packages=$(dpkg -l | grep ^ii | awk '{print $2}' | grep linux-image.*$KERNEL_NAME | sed -e 's/linux-image-//' | sort -V)
+    packages=($packages)
+    len=${#packages[@]}
+    for i in ${!packages[@]};
+    do
+        item=${packages[$i]}
+        itemver=$(echo $item | sed -E 's/([0-9\.]+)[^\.].*/\1/gi')
+        if [[ $i -lt $(($len - 2)) ]] && [ "$itemver" != "$current_run" ]; then
+            echo $RED"  * "$item$NORM
+        else
+            if [ "$itemver" = "$current_run" ]; then
+                echo $YLW"  * $item (currently running version)"$NORM
+            else
+                echo "  * "$item
+            fi
+        fi
+    done
+    echo
+    read -p "[PACKAGES] Uninstalling all but latest 2 or currently running ($current_run). Continue? " reply
+    echo
+    if [ "$reply" = "Y" ] || [ "$reply" = "y" ]; then
+        for i in ${!packages[@]};
+        do
+            item=${packages[$i]}
+            # Have the linux-image packages; now need to parse the versions, check running, and uninstall all headers and image of each.
+            itemver=$(echo $item | sed -E 's/([0-9\.]+)[^\.].*/\1/gi')
+            if [[ $i -lt $(($len - 2)) ]] && [ "$itemver" != "$current_run" ]; then
+                echo $RED"  * Uninstalling "$item"..."$NORM
+                sudo apt remove -y linux*$item
+                echo
+                echo $GRN"Done."$NORM
+                echo
+            else
+                if [ "$itemver" = "$current_run" ]; then
+                    echo $GRN"  * Preserving $item $YLW(currently running version)$NORM"
+                else
+                    echo $GRN"  * Preserving $item"$NORM
+                fi
+            fi
+        done
+    else
+        echo $GRN"Nothing removed. Carry on."$NORM
+    fi
+
+    echo $GRN"Done! All clean."$NORM
+
+    exit 0
+fi
+
+###############################################################################
+# DOWNLOAD PHASE
+if $DOWNLOAD; then
+    if [ ! -d $SRCDIR ]; then mkdir -p $SRCDIR; fi
+    cd $SRCDIR
+
+    echo -n "Grabbing the latest kernel version from git... "
+
+    #######
+    # TODO: Use this instead: https://www.kernel.org/releases.json
+    GIT_URL="https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/"
+    if [ $KERNEL_TREE = "torvalds" ] || [ $KERNEL_TREE = "rc" ]; then
+        GIT_URL="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/"
+    fi
+
+    DL_VERSION=$(git ls-remote --tags --refs $GIT_URL | awk '{print $2}' | sort -V)
+    if [ $KERNEL_TREE != "rc" ]; then DL_VERSION=$(echo "$DL_VERSION" | grep -v rc); fi
+    DL_VERSION=$(echo "$DL_VERSION" | tail -n 1 | sed -e 's_.*refs/tags/v__')
+
+    echo "it's $DL_VERSION (currently running $current_run)"
+
+    if $GET_VERSION_ONLY; then exit 0; fi
+
+    echo "Ensuring we have sources for Linux kernel $DL_VERSION..."
+
+    LATEST_VERSION="linux-$DL_VERSION"
+    PREV_VERSION=$(find . -maxdepth 1 -type d -iname "linux-*" | sort -V | grep -v "linux-$DL_VERSION" | tail -n 1 | sed -e 's/^\.\///')
+
+    echo "DEBUG: PREV_VERSION=$PREV_VERSION"
+
+    if [[ ! -d "$PREV_VERSION" ]]; then
+        echo "No previous kernel builds. You'll need to copy a suitable .config into the source directory."
+    else
+        echo "Previous kernel: $PREV_VERSION"
+        if [[ -L previous ]] || [[ -f previous ]]; then rm previous; fi
+        ln -s $PREV_VERSION previous
+    fi
+
+    if [[ ! -d "$LATEST_VERSION" ]]; then
+        echo "Downloading kernel linux-$DL_VERSION.tar.xz..."
+        if [ $KERNEL_TREE = "torvalds" ] || [ $KERNEL_TREE = "rc" ]; then
+            wget https://git.kernel.org/torvalds/t/linux-$DL_VERSION.tar.gz
+            tar -xvf "linux-$DL_VERSION.tar.gz"
+            rm linux-$DL_VERSION.tar.gz
+        else
+            wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$DL_VERSION.tar.xz
+            tar -xvf "linux-$DL_VERSION.tar.xz"
+            rm linux-$DL_VERSION.tar.xz
+        fi
+    else
+        echo "Sources already in ./$LATEST_VERSION. Good to go. Remove them if you want to re-download."
+    fi
+
+    if [[ -L latest ]] || [[ -f latest ]]; then rm latest; fi
+    ln -s $LATEST_VERSION latest
+
+    if [ ! -e "$LATEST_VERSION/.config" ]; then
+        if [ -d "$LATEST_VERSION" ] && [ -d "$PREV_VERSION" ]; then
+            if $ASKFIRST; then
+                if $CONFIGURE; then action="menuconfig"; else action="oldconfig"; fi
+                read -p "Copy .config from $PREV_VERSION to $LATEST_VERSION and 'make $action'? (Y/n) " reply
+                echo
+            else
+                reply="Y"
+            fi
+            
+            if [ "$reply" = "Y" ] || [ "$reply" = "y" ] || [ "$reply" = "" ]; then
+                cp "$PREV_VERSION/.config" "$LATEST_VERSION/.config"
+                cd "$SRCDIR/$LATEST_VERSION"
+                if $CONFIGURE; then
+                    make menuconfig
+                else
+                    make oldconfig
+                fi
+            fi
+        fi
+    else
+        echo "DEBUG: Configure: $CONFIGURE"
+        # Enter menuconfig if asked
+        if $CONFIGURE; then
+            cd "$SRCDIR/$LATEST_VERSION"
+            make menuconfig
+        fi
+    fi
+
+
+    if $ASKFIRST; then
+        read -p "Continue to build kernel $LATEST_VERSION? (Y/n) " reply
+        echo
+        if [ "$reply" != "Y" ] && [ "$reply" != "y" ] && [ "$reply" != "" ]; then
+            echo "Aborting" && exit 1
+        fi
+    fi
+    BUILD=true
+    cd "$SRCDIR/$LATEST_VERSION"
+fi
+
+###############################################################################
+# BUILD PHASE
+if $BUILD; then
+    if [ ! -f ".config" ]; then
+        echo "${RED}No .config exists. Either "make menuconfig" or copy an old config and "make oldconfig" first.${NORM}"
+        usage
+        exit 1
+        # TODO: Copy config from .config directory interactively.
+        #       Or give user option to create a new configuration in various ways.
+    fi
+    VERSION=$(head -n3 .config | grep "Kernel" | sed "s/\(# \| Kernel.*\)//g")
+    VERSION_NUM=$(echo "$VERSION" | sed "s/Linux\S\+ //g")
+    LOCALVERSION=$(grep LOCALVERSION .config | grep -v ^# | sed s/^.*=// | sed s/\"//g)
+
+    # We have a config and will build it, so make a copy in $SRCDIR/config
+    cp .config $SRCDIR/config/$VERSION_NUM$LOCALVERSION.config
+
+    echo "${GREEN}Copied .config to $SRCDIR/config/$VERSION_NUM$LOCALVERSION.config"
+
+    echo "== Building $VERSION on $(hostname) using $(nproc) threads."
+    echo "== Kernel version: $VERSION"
+    echo "Kernel local name will be: $LOCALVERSION"
+
+    if $ASKFIRST; then
+        read -p "  Is this correct? (Y/n) " reply
+        echo
+        [ "$reply" != "Y" ] && [ "$reply" != "y" ] && [ "$reply" != "" ] && echo "Aborting. Set new name with 'make menuconfig' and try again." && exit 1
+    fi
+
+    #echo "Disabling KEYS..."
+    #scripts/config --disable SYSTEM_TRUSTED_KEYS
+    #scripts/config --disable SYSTEM_REVOCATION_KEYS
+
+    echo "Building a kernel without DEBUG symbols; build manually if they're needed."
+    scripts/config --disable DEBUG_INFO
+    scripts/config --disable DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT
+    scripts/config --disable DEBUG_INFO_DWARF4
+    scripts/config --disable DEBUG_INFO_DWARF5
+    scripts/config --enable DEBUG_INFO_NONE
+
+    echo "Compiling..."
+    if [[ -n $MARCH ]]; then
+        echo "${RED}Building optimized kernel for $MARCH architecture only!${NORM}"
+        if $DRY_RUN; then
+            echo "Dry run - next command would be:"
+            echo "time nice make -j$(nproc) KCFLAGS=\"-march=$MARCH -mtune=$MARCH\" KCPPFLAGS=\"-march=$MARCH -mtune=$MARCH\" bindeb-pkg"
+        else
+            time nice make -j$(nproc) KCFLAGS="-march=$MARCH -mtune=$MARCH" KCPPFLAGS="-march=$MARCH -mtune=$MARCH" bindeb-pkg
+        fi
+    else
+        if $DRY_RUN; then
+            echo "Dry run - next command would be:"
+            echo "time nice make -j$(nproc) bindeb-pkg"
+        else
+            time nice make -j$(nproc) bindeb-pkg
+        fi
+    fi
+
+    echo "Compilation complete. debs available in the parent folder."
+
+    if ! $DRY_RUN; then
+        if $ASKFIRST; then
+            read -p "  Install now? (Y/n) " reply
+            echo
+            if [ "$reply" != "Y" ] && [ "$reply" != "y" ]  && [ "$reply" != "" ]; then
+                echo "Not installing."
+                exit 1
+            fi
+        fi
+        cd $SRCDIR
+        # Find the latest package
+        # Old method:
+        #   latestheaders=$( find . -maxdepth 1 -wholename "./linux-headers-*" | sort -V | tail -n 1 )
+        #   latestimg=$( find . -maxdepth 1 -wholename "./linux-image-*" | sort -V | tail -n 1 )
+        latestheaders=$(ls -aht linux-headers-*.deb | head -n 1)
+        latestkernel=$(ls -aht linux-image-*.deb | head -n 1)
+
+        sudo dpkg -i "$latestheaders" "$latestkernel"
+
+        # Symlink the latest kernel and old kernel in the boot directory
+        latestimg=$(ls /boot/initrd.img-* | sort --version-sort | tail -n 1)
+        latestvm=$(ls /boot/vmlinuz-* | sort --version-sort | tail -n 1)
+
+        previmg=$(ls /boot/initrd.img-* | sort --version-sort | tail -n 2 | head -n 1)
+        prevvm=$(ls /boot/vmlinuz-* | sort --version-sort | tail -n 2 | head -n 1)
+
+        echo "Properly linking latest and 2nd-latest kernel symlinks in /boot..."
+        echo "Latest kernel:"
+        echo "  - $latestimg"
+        echo "  - $latestvm"
+        echo "Previous kernel:"
+        echo "  - $previmg"
+        echo "  - $prevvm"
+
+        if [[ $previmg = $latestimg ]]; then
+            echo "WARNING: only one kernel is present. Cleaning up .old links if present."
+            [ -f /boot/initrd.img.old ] && rm /boot/initrd.img.old
+            [ -f /boot/vmlinuz.old ] && rm /boot/vmlinuz.old
+        else
+            echo "Linking /boot/initrd.img.old and /boot/vmlinuz.old..."
+            sudo ln -sf $previmg /boot/initrd.img.old
+            sudo ln -sf $previmg /boot/vmlinuz.old
+        fi
+
+        echo "Linking /boot/initrd.img and /boot/vmlinuz..."
+        sudo ln -sf $latestimg /boot/initrd.img
+        sudo ln -sf $latestvm /boot/vmlinuz
+
+        echo "Installation complete."
+    fi
+fi
+
+if ! $BUILD && ! $DOWNLOAD; then
+    echo "${RED}Nothing to do.${NORM}"
+    usage
+    exit 1
+fi
