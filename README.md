@@ -31,37 +31,37 @@ Copy the `buildkern` executable script to a directory in your $PATH. `$HOME/bin`
 
 ## Usage
 
-**buildkern:** get a Linux kernel and build it for Debian.
+    **buildkern:** get a Linux kernel and build it for Debian.
 
-This script is designed to make keeping kernels up to date on Debian as
-simple as other activities on a modern Linux system.
+    This script is designed to make keeping kernels up to date on Debian as
+    simple as other activities on a modern Linux system.
 
-Given the parameter -b or --build, buildkern simply looks for a properly configured kernel 
-config in the current directory and initiates a 'bindeb-pkg' build for Debian.
-This will produce .deb packages you can easily install with 'dpkg -i'.
+    Given the parameter -b or --build, buildkern simply looks for a properly configured kernel 
+    config in the current directory and initiates a 'bindeb-pkg' build for Debian.
+    This will produce .deb packages you can easily install with 'dpkg -i'.
 
-With most parameters, buildkern will instead download a kernel to the SRCDIR 
-folder, extract it, configure it with various prompts, and then build it.
+    With most parameters, buildkern will instead download a kernel to the SRCDIR 
+    folder, extract it, configure it with various prompts, and then build it.
 
-The default setup is to have sources live at ~/src/linux, with your 
-configuration files for various builds in ~/src/linux/config. This may be changed 
-in the script.
+    The default setup is to have sources live at ~/src/linux, with your 
+    configuration files for various builds in ~/src/linux/config. This may be changed 
+    in the script.
 
-Parameters:
-  -h|--help: show this message.
-  -v|--get-version: print the latest release only (works with other params)
-  -d|--download: download the latest kernel (stable by default) before building
-  -b|--build: build the kernel in the current dir (or the one just grabbed)
-  -c|--configure: run 'make menuconfig' to enter kernel configuration before compiling
-  -r|--rc: download an RC kernel. Implies -d.
-  -s|--stable: download a stable kernel. Implies -d. Default
-  --clean: automatically clean all sources and installed kernels of yours, keeping the latest two
-  --torvalds: get directly from Linus Torvalds' repo (sometimes needed for newest releases)
-  --version: download and build a specific version (6.x branch only right now)
-  --march=[native|arch]: build an optimized kernel specifically for the specified 
-                        CPU. Defaults to 'native' (current CPU) if none specified.
-                        Note: this script is not recommended for cross-compiling, as
-                        significant additional setup is necessary.
-  -o|--optimized: shortcut for "-dbs --march=native", an optimized kernel for the current machine (ONLY).
-  -y|--yes: say yes to all prompts immediately. Good for non-interactive/scripting and/or laziness.
-  --dry-run: don't actually do anything, just show what would be done.
+    Parameters:
+    -h|--help: show this message.
+    -v|--get-version: print the latest release only (works with other params)
+    -d|--download: download the latest kernel (stable by default) before building
+    -b|--build: build the kernel in the current dir (or the one just grabbed)
+    -c|--configure: run 'make menuconfig' to enter kernel configuration before compiling
+    -r|--rc: download an RC kernel. Implies -d.
+    -s|--stable: download a stable kernel. Implies -d. Default
+    --clean: automatically clean all sources and installed kernels of yours, keeping the latest two
+    --torvalds: get directly from Linus Torvalds' repo (sometimes needed for newest releases)
+    --version: download and build a specific version (6.x branch only right now)
+    --march=[native|arch]: build an optimized kernel specifically for the specified 
+                            CPU. Defaults to 'native' (current CPU) if none specified.
+                            Note: this script is not recommended for cross-compiling, as
+                            significant additional setup is necessary.
+    -o|--optimized: shortcut for "-dbs --march=native", an optimized kernel for the current machine (ONLY).
+    -y|--yes: say yes to all prompts immediately. Good for non-interactive/scripting and/or laziness.
+    --dry-run: don't actually do anything, just show what would be done.
