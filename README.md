@@ -9,9 +9,9 @@ Buildkern works with the apt package manager and the build-in kernel compiler de
 
 Buildkern does not come with kernel configuraton! This is the most critical part of any custom kernel. See the section "Making your kernel config" below for more information.
 
-For normal desktop kernel compilation once you have everything set up (see below), you can just run 'buildkern -o'. This will download, configure, and build a kernel optimized for exactly your current system (and only your current system). Note: it uses the default optimization level and compile flags, as the kernel is sensitive to compiler flags and there's near zero benefit. If you would like to use optimization flags, such as -O3, these can be configured in your kernel config.
+For normal desktop kernel compilation once you have everything set up (see below), you can just run `buildkern -o`. This will download, configure, and build a kernel optimized for exactly your current system (and only your current system). Note: it uses the default optimization level and compile flags, as the kernel is sensitive to compiler flags and there's near zero benefit to changing them.
 
-Run buildkern with no arguments for full usage.
+Run `buildkern` with no arguments for full usage.
 
 *Note: This script is not designed for building generic or portable kernels. It builds kernels for your current machine. Generally speaking, this will mean a faster, more appropriate kernel for your hardware that's streamlined and compiled for exactly what your CPU likes. It can result in a 3-5% speedup from a stock generic kernel, which is generally speaking not worth the trouble, but if it's easy enough, why not?*
 
