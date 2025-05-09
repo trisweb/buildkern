@@ -53,7 +53,7 @@ Do this by entering your source folder, and running `make menuconfig` or `make g
    
 With this method, you will be starting from a minimal set of drivers and options and "additively" making a kernel by adding what you have. You need to take care to include every device your system has, for which there are a few strategies to discover and catalog.
    
-Here is a guide to the various options for generating a brand new config. A good start is `make localmodconfig`, which will build a kernel with modules that are currently loaded on the running system, however it will be incomplete.
+[Here is a guide to the various options](https://wiki.gentoo.org/wiki/Kernel/Configuration#Configuration) for generating a brand new config. A good start is `make localmodconfig`, which will build a kernel with modules that are currently loaded on the running system, however it will be incomplete. I recommend you continue following the Gentoo guide if you go this route, as it is designed for this purpose.
 
 Once created, you then need to `make manuconfig` or `make gconfig` (or your preferred method) to customize and add modules and options to reach a working kernel.
 
