@@ -7,11 +7,9 @@ Lightweight Debian-based custom kernel downloader, builder, and manager
 
 This Debian Kernel build script makes compiling your own kernels and keeping up to date with latest kernels very easy. It works with the apt package manager and the build-in kernel compiler debian packaging pipeline to enable you to treat your custom kernels as a real system package, just like your distro would.
 
-I recommend you start by creating your own kernel config. This is the only part I haven't create a guided system for, but it's good to learn in any case. To do this, run 'buildkern -d' to download the latest kernel version, then cd into the source folder, and run "make menuconfig". You can also start with the config file from your distro's kernel, which will be large and have a lot that you will not need, but should be safe and more guaranteed to work. I recommend you start your own config.
+I recommend you start by creating your own kernel config. This is the only part I haven't create a guided system for, but it's good to learn in any case. To do this, run `buildkern -d` to download the latest kernel version, then cd into the source folder, and run `make menuconfig`. You can also start with the config file from your distro's kernel (usually located in /boot), which will be large and have a lot that you will not need, but should be safe and more guaranteed to work. I recommend you start your own config. [Here is a good guide.](https://how-to.fandom.com/wiki/How_to_configure_the_Linux_kernel)
 
-Here's a good guide: https://how-to.fandom.com/wiki/How_to_configure_the_Linux_kernel
-
-For normal every day kernel compilation once you have a config, you can just run 'buildkern -o'. This will download, configure, and build a kernel optimized for exactly your current system (and only your current system). Note: it uses the default optimization level and compile flags, as the kernel is sensitive to compiler flags and there's near zero benefit. If you would like to use optimization flags, such as -O3, these can be configured in your kernel config.
+For normal desktop kernel compilation once you have a config, you can just run 'buildkern -o'. This will download, configure, and build a kernel optimized for exactly your current system (and only your current system). Note: it uses the default optimization level and compile flags, as the kernel is sensitive to compiler flags and there's near zero benefit. If you would like to use optimization flags, such as -O3, these can be configured in your kernel config.
 
 If you just want to check if a new kernel version is available, you can run 'buildkern -v'
 
@@ -23,7 +21,7 @@ Run buildkern with no arguments for full usage.
 
 buildkern handles most of the process of downloading, compiling, installing, and cleaning your custom kernels, however it still leaves some of the process to you, primarily your kernel config. See above for how to generate one.
 
-Before you start, you should also edit the `buildkern` script file, with two key configuration params near the top: the folder you want your sources in (will be created, defaults to `$HOME/src/linux`), and where you want to store your config backups (defaults to `/config` in your source folder). You should also enter your kernel LOCALVERSION (the name of your custom kernel, usually a suffix) here, so that `--clean` can restrict itself to deleting only your custom kernels.
+Before you start, you should also edit the `buildkern` script file, with two key configuration params near the top: the folder you want your sources in (will be created, defaults to `$HOME/src/linux`), and where you want to store your config backups (defaults to `/config` in your source folder). 
 
 ## Installing
 
@@ -31,10 +29,14 @@ Before you start, you should also edit the `buildkern` script file, with two key
 2. Install dependencies:
     
         apt install build-essential bc kmod cpio flex libncurses5-dev libelf-dev libssl-dev dwarves bison packaging-dev
+    
+4. Edit the script configuration
+
+       You should enter your kernel LOCALVERSION (the name of your custom kernel, usually a suffix) within the script file, so that `--clean` can restrict itself to deleting only your custom kernels. You may also update paths for the kernel source and config backups.
 
 ## Usage
 
-    **buildkern:** get a Linux kernel and build it for Debian.
+    **buildkern:** get a Linux kernel and build it for Debian-based Linux systems.
 
     This script is designed to make keeping kernels up to date on Debian as
     simple as other activities on a modern Linux system.
