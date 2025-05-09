@@ -43,13 +43,19 @@ At this point, you have a few options on how to generate your kernel configurati
    
 Copying an existing configuration from a working, generic kernel is a failsafe way to achieve a running and stable kernel. To find your existing config, look for config files in your `/boot` directory or equivalent, or look in /usr/src/linux.
 
+Copy the config to the file `.config` in your kernel source under $HOME/src/linux/[linux-version].
+
 Once you have a config, you can  "whittle it down," removing modules and devices you don't need, and adding any that you prefer or will need. Usually, you will be painstakingly removing many options using this method, however it is a good exercise to understand the kernel you are building.
+
+Do this by entering your source folder, and running `make menuconfig` or `make gconfig` -- then review all of the options to configure what's enabled or not.
 
 #### Create a new configuration for your system from scratch (Advanced)
    
 With this method, you will be starting from a minimal set of drivers and options and "additively" making a kernel by adding what you have. You need to take care to include every device your system has, for which there are a few strategies to discover and catalog.
    
 Here is a guide to the various options for generating a brand new config. A good start is `make localmodconfig`, which will build a kernel with modules that are currently loaded on the running system, however it will be incomplete.
+
+Once created, you then need to `make manuconfig` or `make gconfig` (or your preferred method) to customize and add modules and options to reach a working kernel.
 
 ## General advice for building your own kernel
 
